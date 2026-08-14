@@ -1,5 +1,6 @@
 import streamlit as st
-from chat import responder
+from chat import DOCUMENTO, responder
+
 
 st.set_page_config(page_title="Agente BuyMais", page_icon="🤖", layout="centered")
 
@@ -7,20 +8,20 @@ st.title("🤖 Agente de Reembolsos BuyMais")
 
 st.write("Faça perguntas sobre a Política de Reembolsos e Devoluções da BuyMais.")
 
-
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []
 
 def exibir_fontes(fontes: list[str]) -> None:
     if not fontes:
         return
-    st.markdown("**Fonte consultada:**")
+    st.markdown(f"**Fonte consultada:** {DOCUMENTO}")
     for fonte in fontes:
         st.caption(f"- {fonte}")
-
+        
 for mensagem in st.session_state.mensagens:
     with st.chat_message(mensagem["role"]):
         st.markdown(mensagem["content"])
+
         if mensagem["role"] == "assistant":
             exibir_fontes(mensagem.get("fontes", []))
 
