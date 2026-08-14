@@ -69,15 +69,16 @@ def montar_contexto(resultados: list[tuple[Document, float]]) -> str:
         linha_origem = metadados.get("linha_origem", "não informada")
 
         contexto= f"""
-[Fonte {num}]
+[FONTE {num}]
 Seção: {secao}
 Título: {titulo}
 Arquivo: {arquivo_origem}
 Linha: {linha_origem}
-Score: {score:.4f}]
+Score: {score:.4f}
 
 Conteúdo:
 {documento.page_content}
+[FIM DA FONTE {num}]
 """.strip()
 
         contextos.append(contexto)
@@ -85,48 +86,101 @@ Conteúdo:
     return "\n\n" + ("\n\n" + "-" * 80 + "\n\n").join(contextos)
 
 
-def montar_prompt(pergunta: str, contexto: str) -> str:
+def montar_prompt(pergunta: str, contexto: str, historico: str) -> str:
     return f"""
-Você é o assistente da BuyMais para a Política de Reembolsos e Devoluções.
+Você é o assistente virtual da BuyMais para a Política de Reembolsos e Devoluções.
 
-Regras:
+Sua tarefa é responder à PERGUNTA DO CLIENTE usando exclusivamente as fontes
+fornecidas no CONTEXTO DA POLÍTICA.
+
+## Procedimentos obrigatórios antes de responder:
+1. Leia integralmente TODAS as fontes numeradas no contexto, da Fonte 1 até a última fonte.
+2. Identifique, em cada fonte:
+   - regras diretamente aplicáveis à pergunta;
+   - condições, exceções e limitações;
+   - informações complementares que ajudem a completar a resposta.
+3. Produza uma resposta consolidada:
+   - priorize a informação mais diretamente relacionada à pergunta;
+   - inclua informações complementares relevantes de outras fontes;
+   - não omita uma condição importante presente em outra fonte;
+   - se houver conflito entre fontes, informe o conflito sem tentar inventar
+     uma regra para resolvê-lo.
+4. Diferencie claramente prazos ou regras de etapas distintas. Por exemplo:
+   - prazo para solicitar devolução/reembolso;
+   - prazo de análise/validação;
+   - prazo de processamento após aprovação.
+5. Se uma informação se aplicar apenas a um cenário específico, deixe essa
+   condição explícita.
+
+## Regras obrigatórias:
 - Responda sempre em português do Brasil.
-- Seja objetivo, cordial e profissional.
-- Use exclusivamente as informações do CONTEXTO para responder dúvidas sobre reembolsos, devoluções, prazos, pagamentos e condições.
-- Nunca invente regras, prazos, valores ou condições.
+- Seja claro, objetivo, cordial e profissional.
+- Use exclusivamente  todas as informações do CONTEXTO para responder as perguntas e afirmar fatos.
+- Nunca invente regras, prazos, valores, condições ou qualquer outra informação que não esteja no CONTEXTO.
 - Não use conhecimento externo. A única fonte de informação é o CONTEXTO fornecido.
+- Não responda apenas com uma fonte se outras fontes recuperadas contiverem
+  condições ou informações relevantes para a mesma pergunta.
 - Não repita uma saudação longa, apresentação ou mensagem de boas-vindas.
-- Se a mensagem do cliente for apenas uma saudação, responda de forma curta, por exemplo: "Olá! Como posso ajudar com reembolsos ou devoluções?"
+- Se a mensagem do cliente for apenas uma saudação, responda de forma curta, por exemplo: 
+  "Olá! Como posso ajudar com reembolsos ou devoluções?"
 - Não faça várias perguntas na mesma resposta.
 - Não diga que consultou documentos, fontes ou políticas.
-- Se houver informação parcial, explique claramente a condição aplicável.
+- Se houver apenas resposta parcial, forneça o que foi encontrado e informe
+  objetivamente qual parte não está definida na política.
 - Só responda "Não encontrei essa informação na política disponível." se o contexto não trouxer nenhuma informação relacionada à dúvida.
 
-Contexto:
+## Formato esperado
+
+- Comece com a resposta direta em uma ou duas frases.
+- Depois, se necessário, adicione uma seção "Detalhes importantes:" com bullets.
+- Não crie uma seção de detalhes se ela não agregar informação.
+
+HISTÓRICO DE PERGUNTAS:
+{historico}
+
+CONTEXTO:
 {contexto}
 
-Pergunta:
+PERGUNTA:
 {pergunta}
 
-Resposta:
+RESPOSTA:
 """.strip()
 
 
 def extrair_fontes(resultados: list[tuple[Document, float]]) -> list[str]:
     fontes: list[str] = []
-    
+    visto: set[tuple[str, str]] = set()  # Para evitar duplicatas de seção e título
+
     for documento, _ in resultados:
         metadados = documento.metadata
         secao = metadados.get("secao", "não informada")
         titulo = metadados.get("titulo", "não informado")
-        linha = metadados.get("linha_origem", "?")
-          
-        
+        linha = metadados.get("linha_origem", "?")          
+
+        chave = (secao, titulo)
+        if chave in visto:
+            continue
+        visto.add(chave)
+
         fontes.append(f"📄 Seção: {secao} - {titulo} - Linha: {linha}")
     
     return fontes 
 
-def responder(pergunta: str, quantidade_documentos: int=4) -> tuple[str, list[str]]:
+def historico_perguntas(mensagens: list[dict], limite: int = 6) -> list[str]:
+    if not mensagens:
+        return "Sem histórico de perguntas."
+    ultimas_perguntas = mensagens[-limite:]
+    linhas: list[str] = []
+    for mensagem in ultimas_perguntas:
+        papel = "Cliente" if mensagem["role"] == "user" else "Assistente"
+        conteudo = mensagem["content"].strip()
+        if conteudo:
+            linhas.append(f"{papel}: {conteudo}")
+        
+    return "\n".join(linhas) or "Sem histórico de perguntas."
+
+def responder(pergunta: str, quantidade_documentos: int=4, historico: list[dict] | None = None) -> tuple[str, list[str]]:
 
     pergunta = pergunta.strip()
     if not pergunta:
@@ -137,24 +191,11 @@ def responder(pergunta: str, quantidade_documentos: int=4) -> tuple[str, list[st
        return ("Não encontrei essa informação na política de reembolso.", [])
     
     contexto = montar_contexto(resultados)
+    historico_chat = historico_perguntas(historico or [])
 
-    # Diagnóstico temporário
-    print("\n" + "=" * 80)
-    print(f"PERGUNTA: {pergunta}")
-
-    for documento, score in resultados:
-        print(f"\nSCORE: {score:.4f}")
-        print(documento.page_content)
-
-    print("\nCONTEXTO ENVIADO:")
-    print(contexto)
-    print("=" * 80)
-
-    prompt = montar_prompt(pergunta, contexto)
+    prompt = montar_prompt(pergunta = pergunta, contexto = contexto, historico = historico_chat)
     resposta_llm = carregar_llm().invoke(prompt)
     resposta = str(resposta_llm.content).strip()
-
-    print(f"\nRESPOSTA DA GROQ: {resposta!r}\n")
 
     fontes = extrair_fontes(resultados)
 
