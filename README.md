@@ -223,19 +223,6 @@ Testes realizados em ambiente local:
   <img src="assets/imagens/teste_chat_local2.png" alt="Teste nº 2" width="300">
 </p>
 
-
-Testes realizados após o deploy na **Oracle Cloud Infrastructure (OCI)**:
-
-<p align="center">
-  <img src="assets/imagens/teste_chat_cloud.png" alt="Teste nº 3" width="300">
-
-  <img src="assets/imagens/teste_chat_cloud2.png" alt="Teste nº 4" width="300">
-
-   <img src="assets/imagens/IP_da_VM_OCI.png" alt="IP da Instância OCI" width="300">
-</p>
-
-
-
 ## 🔒 Segurança
 
 - A `GROQ_API_KEY` fica somente no `.env` (ignorado pelo git)
@@ -245,7 +232,7 @@ Testes realizados após o deploy na **Oracle Cloud Infrastructure (OCI)**:
 
 ---
 
-## ☁️ Deploy (ajustar)
+## ☁️ Deploy 
 
 O desafio exige deploy na **Oracle Cloud Infrastructure (OCI)**. Opções:
 
@@ -256,6 +243,26 @@ O desafio exige deploy na **Oracle Cloud Infrastructure (OCI)**. Opções:
    ```bash
    streamlit run app.py --server.port 8501 --server.address 0.0.0.0
  
+A aplicação foi publicada na Oracle Cloud Infrastructure,
+utilizando uma instância OCI Compute com Ubuntu.
+
+O agente é executado com Streamlit na porta 8501.
+
+Acesso:
+
+http://129.146.115.185:8501
+
+## Aplicação em execução
+
+Testes realizados após o deploy na **Oracle Cloud Infrastructure (OCI)**:
+
+<p align="center">
+  <img src="assets/imagens/teste_chat_cloud.png" alt="Teste nº 3" width="300">
+
+  <img src="assets/imagens/teste_chat_cloud2.png" alt="Teste nº 4" width="300">
+
+   <img src="assets/imagens/IP_da_VM_OCI.png" alt="IP da Instância OCI" width="300">
+</p>
 
 ---
 
