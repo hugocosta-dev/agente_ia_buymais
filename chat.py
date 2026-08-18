@@ -34,7 +34,7 @@ def carregar_llm()-> ChatGroq:
     if not api_key:
         raise ValueError("A chave de API no arquivo .env não foi encontrada.")
 
-    return ChatGroq(model="llama-3.3-70b-versatile", temperature=0, api_key=api_key)
+    return ChatGroq(model="qwen/qwen3.6-27b", temperature=0.4, api_key=api_key, reasoning_effort="none", reasoning_format="hidden")
 
 def buscar_documentos(pergunta: str, quantidade: int = 4) -> list[tuple[Document, float]]:
     pergunta = pergunta.strip()
