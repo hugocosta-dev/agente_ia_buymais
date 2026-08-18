@@ -1,72 +1,64 @@
-# 🤖 Agente de Reembolsos BuyMais
+# 🤖 Agente de Reembolsos BuyMais — RAG com LangChain + Streamlit
 
-Agente desenvolvido em **Python** e **Streamlit** para responder perguntas sobre a política de reembolsos, devoluções e trocas da BuyMais.
+Agente de IA conversacional (RAG — *Retrieval-Augmented Generation*) que responde perguntas sobre a **Política de Reembolsos, Devoluções e Trocas da BuyMais**, citando a fonte exata (seção, título e linha do documento) de cada resposta.
 
-O projeto utiliza uma arquitetura **RAG — Retrieval-Augmented Generation**. O conteúdo da política é carregado a partir de um arquivo CSV, transformado em embeddings e armazenado em um índice vetorial FAISS. Quando o usuário faz uma pergunta, os trechos mais relevantes são recuperados e enviados ao modelo de linguagem para gerar a resposta.
-
-> Este projeto utiliza uma política documental fictícia criada com ajuda de IA e possui finalidade educativa.
+> 📌 Este projeto utiliza uma política documental fictícia (criada com apoio de IA) e possui **finalidade educativa** — é o challenge do curso de LangChain/Agentes da Alura.
 
 ---
 
-## 📌 Funcionalidades
+## ✨ Funcionalidades
 
-- 💬 Interface de chat com Streamlit
-- 📄 Leitura da política a partir de arquivo CSV
-- 🔎 Busca semântica utilizando embeddings
-- 🧠 Respostas geradas por modelo Llama através da Groq
-- 🗂️ Armazenamento local do índice vetorial com FAISS
-- 📚 Exibição das fontes consultadas
-- 🔐 Uso de variáveis de ambiente para armazenar a chave da API
-- ⚡ Cache dos modelos e do índice para evitar carregamentos repetidos
-
----
-
-## 🛠️ Tecnologias utilizadas
-
-- Python 3.10+
-- [Streamlit](https://streamlit.io/)
-- [LangChain](https://www.langchain.com/)
-- [FAISS](https://github.com/facebookresearch/faiss)
-- [Hugging Face Sentence Transformers](https://huggingface.co/sentence-transformers)
-- [Groq](https://groq.com/)
-- [python-dotenv](https://pypi.org/project/python-dotenv/)
-
-Principais bibliotecas Python:
-
-- `streamlit`
-- `langchain`
-- `langchain-community`
-- `langchain-core`
-- `langchain-groq`
-- `langchain-huggingface`
-- `faiss-cpu`
-- `sentence-transformers`
-- `python-dotenv`
+- 💬 **Chat interativo** com Streamlit (histórico de conversa na sessão)
+- 📄 **Leitura da política** a partir de arquivo CSV (`id, secao, titulo, conteudo, empresa`)
+- 🔎 **Busca semântica** com embeddings multilingue (Sentence Transformers)
+- 🧠 **Geração de resposta** com Qwen3.6-27b via API da **Groq** 
+- 📚 **Citação da fonte exata**: seção, título e linha do CSV, com deduplicação
+- 🗂️ **Índice vetorial FAISS** criado/recarregado automaticamente na execução
+- 🔐 **Chave da API** protegida em variável de ambiente (`.env`)
+- ⚡ **Cache em memória** (`lru_cache`) dos modelos e do índice
 
 ---
 
 ## 🧱 Arquitetura
 
-O fluxo principal da aplicação é:
+```
+politica_reembolsos_buymais.csv
+        │
+        ▼
+criar_indice_vetorial.py        ← lê o CSV, gera embeddings, salva índice FAISS
+        │
+        ▼
+   indice/db_faiss/             ← índice vetorial local
+        │
+        ▼
+       chat.py                  ← busca semântica + monta contexto + chama LLM
+        │
+        ▼
+       app.py                   ← interface Streamlit (chat + fontes)
+```
 
-```text
-Arquivo CSV
-    ↓
-Document
-    ↓
-Embeddings
-    ↓
-Índice FAISS
-    ↓
+### Fluxo de uma pergunta
+
+```
 Pergunta do usuário
-    ↓
-Busca semântica
-    ↓
-Contexto recuperado
-    ↓
-Modelo LLM da Groq
-    ↓
-Resposta com fontes
+        │
+        ▼
+buscar_documentos()       → FAISS similarity_search_with_score (k=4)
+        │
+        ▼
+montar_contexto()         → formata as fontes numeradas [FONTE 1]…[FIM DA FONTE 1]
+        │
+        ▼
+historico_perguntas()     → últimas 6 mensagens da conversa
+        │
+        ▼
+montar_prompt()           → prompt com procedimentos obrigatórios + regras + contexto + histórico
+        │
+        ▼
+ChatGroq (GPT OSS 120B)  → temperatura 0
+        │
+        ▼
+Resposta + fontes (seção/título/linha) exibidas no Streamlit
 ```
 
 ---
@@ -76,311 +68,203 @@ Resposta com fontes
 ```text
 agente_ia_buymais/
 │
-├── app.py
-├── chat.py
-├── criar_indice_vetorial.py
-├── requirements.txt
-├── .env
+├── app.py                    # Interface Streamlit (chat + exibição de fontes)
+├── chat.py                   # Núcleo do agente (busca, contexto, prompt, resposta)
+├── criar_indice_vetorial.py  # Gera o índice FAISS a partir do CSV
+├── testar_busca.py           # Testa a busca semântica sem abrir a interface
+├── requirements.txt          # Dependências Python
+├── .env.example              # Modelo do arquivo de variáveis sensíveis
 ├── .gitignore
 ├── README.md
 │
 ├── documentos/
-│   └── politica_reembolsos_buymais.csv
+│   └── politica_reembolsos_buymais.csv   # Base documental da política
 │
 └── indice/
-    └── db_faiss/
-        ├── index.faiss
-        └── index.pkl
+    └── db_faiss/             # Índice vetorial (gerado automaticamente)
 ```
-
-### Principais arquivos e funções
 
 | Arquivo | Função |
 |---|---|
-| `criar_indice_vetorial.py` | Lê o CSV e cria o índice FAISS |
-| `chat.py` | Realiza a busca semântica e consulta o modelo LLM |
-| `app.py` | Contém a interface do chat em Streamlit |
-| `politica_reembolsos_buymais.csv` | Base documental da política |
-| `.env` | Armazena variáveis sensíveis |
-| `indice/db_faiss/` | Armazena o índice vetorial gerado |
+| `criar_indice_vetorial.py` | Lê o CSV, valida colunas, cria `Document`s, gera embeddings e salva o índice FAISS |
+| `chat.py` | Carrega vectorstore/LLM com cache, busca os trechos relevantes, monta contexto numerado, monta o prompt com regras e histórico, e retorna resposta + fontes |
+| `app.py` | Interface do chat, mantém histórico na sessão e exibe as fontes em um expander |
+| `testar_busca.py` | Script de teste da recuperação semântica (sem chamar o LLM) |
 
 ---
 
-## ⚙️ Configuração
+## 🚀 Como executar
 
-### 1. Clone o projeto
+### 1. Pré-requisitos
+- Python 3.10+
+- [Git](https://git-scm.com/)
+- Conta gratuita na [Groq](https://console.groq.com/) para gerar a chave de API
+
+### 2. Clone e ambiente virtual
 
 ```bash
-git clone https://github.com/seu-usuario/agente-ia-buymais.git
-cd agente-ia-buymais
+git clone https://github.com/hugocosta-dev/agente_ia_buymais.git
+cd agente_ia_buymais
 ```
 
-Ou faça o download do projeto e abra a pasta no terminal.
-
----
-
-### 2. Crie um ambiente virtual
-
-#### Windows PowerShell
-
+**Windows (PowerShell):**
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate
 ```
 
-#### Linux ou macOS
-
+**Linux/macOS:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
----
-
-### 3. Instale as dependências
+### 3. Instalar dependências
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Um exemplo de arquivo `requirements.txt`:
+### 4. Configurar a chave da API
 
-```txt
-python-dotenv
-streamlit
-faiss-cpu
-langchain
-langchain-community
-langchain-core
-langchain-groq
-langchain-huggingface
-sentence-transformers
-
-```
-
----
-
-### 4. Configure o arquivo `.env`
-
-Crie um arquivo chamado `.env` na raiz do projeto:
+1. Acesse [console.groq.com](https://console.groq.com/) → crie uma conta (ou entre com GitHub/Gmail)
+2. Vá em **API Keys** → **Create API Key** → dê um nome → copie a chave
+   > ⚠️ A chave só é exibida **uma única vez** — salve em local seguro.
+3. Crie o arquivo `.env` na raiz do projeto:
 
 ```env
 GROQ_API_KEY=sua_chave_da_api_groq
 ```
 
-A chave pode ser criada no painel da [Groq](https://console.groq.com/).
+> O `.env` está no `.gitignore` — **nunca** envie a chave para o GitHub. Use o `.env.example` como referência.
 
-> Nunca compartilhe sua chave da Groq nem envie o arquivo `.env` para o GitHub.
+### 5. Executar o agente
+
+```bash
+streamlit run app.py
+```
+
+O índice FAISS é criado automaticamente na primeira execução (se `indice/db_faiss/` não existir). Acesse `http://localhost:8501`.
+
+> 💡 Para testar apenas a busca semântica (sem interface): `python testar_busca.py`
 
 ---
 
-## 📄 Formato do arquivo CSV
+## 📄 Formato do CSV
 
-O arquivo contem as seguintes colunas:
+O arquivo `documentos/politica_reembolsos_buymais.csv` possui as colunas:
 
 ```csv
 id,secao,titulo,conteudo,empresa
 1,1,Propósito,"Conteúdo da seção...",BuyMais
 2,2,Escopo,"Conteúdo da seção...",BuyMais
-3,3,"Princípios gerais","Conteúdo da seção...",BuyMais
-```
-Você pode adaptar o arquivo criar_indice_vetorial de acordo com as colunas do seu arquivo CSV
-
----
-
-## 🧠 Criação do índice vetorial
-
-Antes de executar a aplicação, crie o índice FAISS:
-
-```bash
-python criar_indice_vetorial.py
 ```
 
-Esse processo realiza as seguintes etapas:
+| Coluna | Descrição |
+|---|---|
+| `id` | Identificador da seção |
+| `secao` | Número da seção na política |
+| `titulo` | Título da seção |
+| `conteudo` | Texto da regra/política |
+| `empresa` | Nome da empresa (BuyMais) |
 
-1. Verifica se o arquivo CSV existe;
-2. Lê as linhas da política;
-3. Converte cada linha em um objeto `Document`;
-4. Gera embeddings usando o modelo:
-
-```text
-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-```
-
-5. Cria o índice FAISS;
-6. Salva o índice em:
-
-```text
-indice/db_faiss/
-```
-
-Sempre que o CSV for alterado, o índice deverá ser recriado.
-
-Remova o indice antigo e recrie com os comandos:
-
-### Windows PowerShell
-
-```powershell
-Remove-Item -Recurse -Force .\indice\db_faiss
-python criar_indice_vetorial.py
-```
-
-### Linux ou macOS
-
-```bash
-rm -rf ./indice/db_faiss
-python criar_indice_vetorial.py
-```
----
-
-Depois de criar o índice, execute:
-
-```bash
-streamlit run app.py
-```
+Para usar outro documento, mantenha o mesmo schema e ajuste as colunas esperadas em `criar_indice_vetorial.py`.
 
 ---
 
 ## 💬 Exemplos de perguntas
 
-```text
+```
 Qual é o prazo para solicitar devolução por arrependimento?
-```
-
-```text
 Qual é o prazo para reclamar de um produto incorreto?
-```
-
-```text
 Quanto tempo demora para processar um reembolso aprovado?
-```
-
-```text
 O que é considerado dano em trânsito?
-```
-
-```text
 A política se aplica a compras feitas por canais não oficiais?
 ```
 
----
-
-## 🔎 Como funciona a busca semântica
-
-Quando o usuário envia uma pergunta, o agente:
-
-1. Remove espaços desnecessários;
-2. Converte a pergunta em um embedding;
-3. Consulta o índice FAISS;
-4. Recupera os documentos semanticamente mais próximos;
-5. Monta o contexto com seção, título e conteúdo;
-6. Envia o contexto ao modelo da Groq;
-7. Exibe a resposta e as fontes consultadas.
-
-A aplicação não envia necessariamente todo o CSV ao modelo. Ela recupera os documentos mais relacionados à pergunta.
+> Dica: perguntas com contexto claro (ex.: "Quantos dias corridos o cliente tem para...") tendem a recuperar fontes mais precisas. A palavra "prazo" pode referir-se a etapas diferentes (solicitar × analisar × processar) — o agente foi instruído a diferenciar essas etapas.
 
 ---
 
-Depois, reinicie a aplicação:
+## 🧠 Como o agente funciona (detalhes)
+
+1. **Recuperação (RAG):** a pergunta é convertida em embedding e comparada ao índice FAISS (`paraphrase-multilingual-MiniLM-L12-v2`), retornando os **4 trechos mais similares** com seus scores.
+2. **Contexto numerado:** cada trecho é formatado com marcadores `[FONTE N]` … `[FIM DA FONTE N]` contendo seção, título, arquivo, linha e conteúdo — para o modelo identificar a origem de cada informação.
+3. **Histórico:** as últimas 6 mensagens da conversa são incluídas no prompt para dar contexto.
+4. **Prompt com procedimentos:** o modelo é instruído a ler **todas** as fontes, consolidar informações, diferenciar prazos de etapas distintas, não inventar regras e usar somente o contexto fornecido.
+5. **Resposta + fontes:** a resposta é exibida no chat e as fontes (seção, título e linha — sem duplicatas) aparecem no expander **"Fontes consultadas"**.
+
+### Detalhes técnicos
+
+| Componente | Configuração |
+|---|---|
+| Embeddings | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+| Vectorstore | FAISS (local, `indice/db_faiss/`) |
+| Modelo LLM | `qwen/qwen3.6-27b` (Groq) |
+| Temperatura | `0` (respostas consistentes e determinísticas) |
+| Top-K recuperação | `4` documentos |
+| Histórico no prompt | últimas `6` mensagens |
+| Cache | `@lru_cache` em embeddings, vectorstore e LLM |
+
+---
+
+## 🧪 Testes
+
+Para validar a recuperação semântica sem chamar o LLM:
 
 ```bash
-streamlit run app.py
+python testar_busca.py
 ```
+Testes realizados em ambiente local:
 
----
+<p align="center">
+  <img src="assets/imagens/teste_chat_local.png" alt="Teste nº 1" width="300">
 
-## 🧪 Testando a busca semântica
+  <img src="assets/imagens/teste_chat_local2.png" alt="Teste nº 2" width="300">
+</p>
 
-Para testar perguntas específicas, recomenda-se utilizar perguntas com contexto claro:
 
-```text
-Quantos dias corridos o cliente tem para solicitar devolução por arrependimento?
-```
+Testes realizados após o deploy na **Oracle Cloud Infrastructure (OCI)**:
 
-```text
-Qual é o prazo para comunicar um produto incorreto?
-```
+<p align="center">
+  <img src="assets/imagens/teste_chat_cloud.png" alt="Teste nº 3" width="300">
 
-```text
-Em quanto tempo um reembolso aprovado é processado?
-```
+  <img src="assets/imagens/teste_chat_cloud2.png" alt="Teste nº 4" width="300">
 
-Perguntas muito amplas podem estar relacionadas a mais de uma regra. Por exemplo, a palavra “prazo” pode se referir a:
+   <img src="assets/imagens/IP_da_VM_OCI.png" alt="IP da Instância OCI" width="300">
+</p>
 
-- prazo para solicitar uma devolução;
-- prazo para comunicar um problema na entrega;
-- prazo para processar um reembolso aprovado.
 
----
 
 ## 🔒 Segurança
 
-- Nunca publique a variável `GROQ_API_KEY`;
-- Mantenha o arquivo `.env` fora do GitHub;
-- Não compartilhe índices que contenham dados sensíveis;
-- Não utilize `allow_dangerous_deserialization=True` com índices de origem desconhecida;
-- Utilize dados fictícios ou anonimizados durante os testes;
-- Evite exibir exceções detalhadas em ambiente de produção.
-
-Exemplo de `.gitignore`:
-
-```gitignore
-.venv/
-.env
-__pycache__/
-*.pyc
-.streamlit/
-```
-
-Se o índice for necessário no deploy, ele deverá ser gerado durante o processo de publicação ou enviado para um local controlado.
+- A `GROQ_API_KEY` fica somente no `.env` (ignorado pelo git)
+- Nunca publique a chave nem o `.env` no repositório
+- Dados fictícios/anonimizados para testes
+- Tratamento de erros na interface (sem expor detalhes da exceção ao usuário final)
 
 ---
 
-## ☁️ Deploy
+## ☁️ Deploy (ajustar)
 
-A aplicação pode ser hospedada em serviços compatíveis com aplicações Python, como:
+O desafio exige deploy na **Oracle Cloud Infrastructure (OCI)**. Opções:
 
-- [Streamlit Community Cloud](https://streamlit.io/cloud)
-- [Render](https://render.com/)
-- VPS com Python e nginx
-- Outros serviços que suportem aplicações Streamlit
-
-### Comando de instalação
-
-```bash
-pip install -r requirements.txt
-```
-
-### Comando de execução
-
-```bash
-streamlit run app.py --server.port $PORT --server.address 0.0.0.0
-```
-
-No painel do serviço de hospedagem, configure:
-
-```env
-GROQ_API_KEY=sua_chave_da_api_groq
-```
-
-Também confirme que o índice FAISS está disponível no caminho esperado:
-
-```text
-indice/db_faiss/
-```
+### OCI 
+1. Suba o projeto para uma instância **OCI Compute** (ex.: Ubuntu)
+2. Instale Python, clone o repo e configure o `.env`
+3. Execute o Streamlit em modo headless:
+   ```bash
+   streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+ 
 
 ---
 
 ## 📄 Licença
 
-Este projeto é de uso pessoal e educativo.
-
-A política utilizada é fictícia e pode ser adaptada para estudos, prototipagem e demonstrações de aplicações com inteligência artificial.
+Projeto de uso pessoal e educativo. A política utilizada é fictícia e pode ser adaptada para estudos, prototipagem e demonstrações.
 
 ---
 
 ## ✉️ Contato
 
-Feito por **Hugo Costa**
-
-📧 hugocosta.ti@gmail.com
+Feito por **Hugo Costa** · 📧 hugocosta.ti@gmail.com
